@@ -99,17 +99,9 @@ void position_control::CalculateAttitudeSPFromThrust() {
 
     Eigen::Quaterniond q(rot_des);
 
-    //std::atan2(2*(_qw*_qx+_qy*_qz), 1-2*(_qx*_qx+_qy*_qy));
-    //std::asin(2*(_qw*_qy - _qz*_qx));
-    //std::atan2(2*(_qw*_qz+_qx*_qy), 1-2*(_qy*_qy + _qz*_qz));
-
     _RPY_SP[0] = std::atan2(2*(q.w()*q.x() + q.y()*q.z()), 1 - 2*(q.x()*q.x() + q.y() + q.y()));
     _RPY_SP[1] = std::asin(2*(q.w()*q.y() - q.z()*q.x()));
     _RPY_SP[2] = std::atan2(2*(q.w()*q.z() + q.x()*q.y()), 1 - 2*(q.y()*q.y() + q.z() + q.z()));
-
-    //Eigen::Vector3d desired_att_angles = rot_des.eulerAngles(2,0,1);
-
-    //_RPY_SP = desired_att_angles;
 
     std::cout << "************" << std::endl;
     std::cout << rot_des << std::endl;

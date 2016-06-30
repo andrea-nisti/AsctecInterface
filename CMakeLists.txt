@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(asctecInterface)
+project(asctec_interface)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -127,6 +127,7 @@ include_directories(
 ## Declare a C++ library
  add_library(position_control
    src/lib/position_control.cpp
+   include/asctecInterface/position_control.h
  )
 
 ## Add cmake target dependencies of the library
@@ -135,7 +136,8 @@ include_directories(
 # add_dependencies(asctecInterface ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
- add_executable(position_control_node src/position_control_node.cpp)
+add_executable(position_control_node src/position_control_node.cpp)
+add_executable(position_control_sync_node src/position_control_sync_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -143,11 +145,16 @@ include_directories(
 
 ## Specify libraries to link a library or executable target against
 
-
- target_link_libraries(position_control_node
+target_link_libraries(position_control_node
    position_control
    ${catkin_LIBRARIES}
- )
+        )
+
+target_link_libraries(position_control_sync_node
+        position_control
+        ${catkin_LIBRARIES}
+        )
+
 
 #############
 ## Install ##

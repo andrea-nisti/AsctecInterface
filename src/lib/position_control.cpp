@@ -6,12 +6,28 @@ position_control::position_control()
 
     _position_sp << 0.0,0.0,2;
     _vel_gains_z << 10.0, 3.5 , 0.04; //P, D , I
-    _vel_gains_xy<< 4, 0.3 , 0.01;  //P, D , I
+    _vel_gains_xy<< 4.0 , 1.5 , 0.04;  //P, D , I
     _pos_gains   << 0.2 , 0.2 , 0.2;  //X, Y , Z
     _thrust      << 0.0 , 0.0 , 0.0;
     _vel_err_i   << 0.0 , 0.0 , 0.0;
 
 }
+
+void position_control::ActivatePositionControl() {
+
+    _position_active = true;
+    _velocity_active = false;
+
+}
+
+void position_control::ActivateVelocityControl(){
+
+    _position_active = false;
+    _velocity_active = true;
+
+}
+
+
 
 void position_control::SetOdometry(const rotors_control::EigenOdometry& odometry){
 
@@ -22,6 +38,12 @@ void position_control::SetOdometry(const rotors_control::EigenOdometry& odometry
 void position_control::SetPositionSP(const geometry_msgs::Point pos_sp){
 
     _position_sp = mav_msgs::vector3FromPointMsg(pos_sp);
+
+}
+
+void position_control::SetVelocitySP(const geometry_msgs::Point vel_sp){
+
+    _vel_sp = mav_msgs::vector3FromPointMsg(vel_sp);
 
 }
 
@@ -44,14 +66,27 @@ void position_control::UpdateIntegrals(){
 
 void position_control::CalculateThrustVector(){
 
+    _vel_err_t_2 = _vel_err_t_1;
+    _vel_err_t_1 = _vel_err;
     _vel_err = _vel_sp - _odometry.velocity;
 
     Eigen::Vector3d vel_err_d;
     Eigen::Vector3d thrust_vect ;
 
-    vel_err_d[0] = _pos_gains[0]*(/*Put here SP velocity*/ -_odometry.velocity[0]) - (_odometry.velocity[0] - _prev_vel[0]);
-    vel_err_d[1] = _pos_gains[1]*(/*Put here SP velocity*/ -_odometry.velocity[1]) - (_odometry.velocity[1] - _prev_vel[1]);
-    vel_err_d[2] = _pos_gains[2]*(/*Put here SP velocity*/ -_odometry.velocity[2]) - (_odometry.velocity[2] - _prev_vel[2]);
+    double step = 1 / _spinRate;
+
+
+    // three-point derivative (Lagrange Approach) f'(x) = ( f(x-2h) - 4f(x-h) + 3f(x) ) / 2h
+    vel_err_d[0] = (_vel_err_t_2[0] - 4 * _vel_err_t_1[0] + 3 * _vel_err[0]) / 2 * step;
+    vel_err_d[1] = (_vel_err_t_2[1] - 4 * _vel_err_t_1[1] + 3 * _vel_err[1]) / 2 * step;
+    vel_err_d[2] = (_vel_err_t_2[2] - 4 * _vel_err_t_1[2] + 3 * _vel_err[2]) / 2 * step;
+
+
+//    vel_err_d[0] = _pos_gains[0]*(_vel_sp[0] -_odometry.velocity[0]) - (_odometry.velocity[0] - _prev_vel[0]);
+//    vel_err_d[1] = _pos_gains[1]*(_vel_sp[1] -_odometry.velocity[1]) - (_odometry.velocity[1] - _prev_vel[1]);
+//    vel_err_d[2] = _pos_gains[2]*(_vel_sp[2] -_odometry.velocity[2]) - (_odometry.velocity[2] - _prev_vel[2]);
+
+
 
     UpdateIntegrals();
 
@@ -112,7 +147,8 @@ void position_control::RunController(){
 
     ROS_INFO_ONCE("[pos_ctl] First loop");
 
-    CalculateVelocitySP();
+    if (_position_active)
+        CalculateVelocitySP();
 
     CalculateThrustVector();
 
@@ -120,4 +156,6 @@ void position_control::RunController(){
 
 }
 
-
+Eigen::Vector3d position_control::GetVelocityError (){
+    return _vel_err;
+}

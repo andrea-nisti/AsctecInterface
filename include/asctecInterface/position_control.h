@@ -14,12 +14,20 @@ public:
     position_control();
     void SetOdometry(const rotors_control::EigenOdometry& odometry);
     void SetPositionSP(const geometry_msgs::Point pos_sp);
-
+    void SetVelocitySP(const geometry_msgs::Point vel_sp);
+    void ActivatePositionControl();
+    void ActivateVelocityControl();
     void RunController();
+    Eigen::Vector3d GetVelocityError();
 
     Eigen::Vector3d _thrust;
     Eigen::Vector3d _RPY_SP;
+    const int _spinRate = 50;
+
 private:
+
+    bool _position_active = false;
+    bool _velocity_active = true;
 
     void setup();
     void CalculateVelocitySP();
@@ -40,6 +48,9 @@ private:
 
     Eigen::Vector3d _vel_sp;
     Eigen::Vector3d _vel_err;
+    Eigen::Vector3d _vel_err_t_1; //error at instant t-1
+    Eigen::Vector3d _vel_err_t_2; //error at instant t-2
+
 
     Eigen::Vector3d _vel_err_i;
 

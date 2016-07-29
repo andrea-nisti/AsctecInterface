@@ -1,13 +1,14 @@
-#include "asctecInterface/position_control.h"
+#include <asctecInterface/position_control.h>
 
 position_control::position_control()
 {
     ROS_INFO("[pos_ctl] Position controller created!");
 
-    _position_sp << 0.0,0.0,2;
-    _vel_gains_z << 10.0, 3.5 , 0.04; //P, D , I
-    _vel_gains_xy<< 4.0 , 1.5 , 0.04;  //P, D , I
-    _pos_gains   << 0.2 , 0.2 , 0.2;  //X, Y , Z
+    _position_sp << 0.0 , 0.0 , 2;
+    _vel_gains_z << 10.0, 3.5 , 0.04;  //P, D , I
+    _vel_gains_xy<< 4.0 , 2.0 , 0.04;  //P, D , I
+    _yaw_gains   << 0.3 , 0.5 , 0.0;   //P, D, I
+    _pos_gains   << 0.2 , 0.2 , 0.2;   //X, Y , Z
     _thrust      << 0.0 , 0.0 , 0.0;
     _vel_err_i   << 0.0 , 0.0 , 0.0;
 
@@ -41,10 +42,10 @@ void position_control::SetPositionSP(const geometry_msgs::Point pos_sp){
 
 }
 
-void position_control::SetVelocitySP(const geometry_msgs::Point vel_sp){
+void position_control::SetVelocitySP(const geometry_msgs::Pose vel_sp){
 
-    _vel_sp = mav_msgs::vector3FromPointMsg(vel_sp);
-
+    _vel_sp = mav_msgs::vector3FromPointMsg(vel_sp.position);
+    _yaw_sp = tf::getYaw(vel_sp.orientation);
 }
 
 void position_control::CalculateVelocitySP(){
@@ -73,8 +74,6 @@ void position_control::CalculateThrustVector(){
     Eigen::Vector3d vel_err_d;
     Eigen::Vector3d thrust_vect ;
 
-    double step = 1 / _spinRate;
-
 
     // three-point derivative (Lagrange Approach) f'(x) = ( f(x-2h) - 4f(x-h) + 3f(x) ) / 2h
     vel_err_d[0] = (_vel_err_t_2[0] - 4 * _vel_err_t_1[0] + 3 * _vel_err[0]) / 2 * step;
@@ -93,8 +92,6 @@ void position_control::CalculateThrustVector(){
     thrust_vect[0] = _vel_gains_xy[0] * _vel_err[0] + _vel_gains_xy[1] * vel_err_d[0] + _vel_err_i[0];
     thrust_vect[1] = _vel_gains_xy[0] * _vel_err[1] + _vel_gains_xy[1] * vel_err_d[1] + _vel_err_i[1];
     thrust_vect[2] = _vel_gains_z[0]  * _vel_err[2] + _vel_gains_z[1]  * vel_err_d[2] + _vel_err_i[2] + 15;
-
-    _prev_vel = _odometry.velocity;
 
     _thrust = thrust_vect;
 
@@ -134,15 +131,37 @@ void position_control::CalculateAttitudeSPFromThrust() {
 
     Eigen::Quaterniond q(rot_des);
 
-    _RPY_SP[0] = std::atan2(2*(q.w()*q.x() + q.y()*q.z()), 1 - 2*(q.x()*q.x() + q.y() * q.y()));
+    _RPY_SP[0] = std::atan2(2*(q.w()*q.x() + q.y()*q.z()), 1 - 2*(q.x()*q.x() + q.y()*q.y()));
     _RPY_SP[1] = std::asin(2*(q.w()*q.y() - q.z()*q.x()));
-    _RPY_SP[2] = std::atan2(2*(q.w()*q.z() + q.x()*q.y()), 1 - 2*(q.y()*q.y() + q.z() * q.z()));
+    _RPY_SP[2] = std::atan2(2*(q.w()*q.z() + q.x()*q.y()), 1 - 2*(q.y()*q.y() + q.z()*q.z()));
+
+
 
     std::cout << "************" << std::endl;
-    std::cout << rot_des << std::endl;
+    std::cout << std::setprecision(2) << rot_des << std::endl;
+    std::cout << std::setprecision(2) << "quaternion = [ " << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << " ]" << std::endl;
     std::cout << "************" << std::endl;
 
 }
+
+void position_control::calculateYawCommand(){
+
+    double actual_yaw = mav_msgs::yawFromQuaternion(_odometry.orientation);
+//    std::cout << "actual yaw = " << actual_yaw << std::endl;
+    std::cout << "desired yaw = " << _yaw_sp << std::endl;
+
+    _yaw_err_t_2 = _yaw_err_t_1;
+    _yaw_err_t_1 = _yaw_err;
+    _yaw_err = _yaw_sp - actual_yaw;
+
+    double yaw_err_d = (_yaw_err_t_2 - 4 * _yaw_err_t_1 + 3 * _yaw_err) / 2 * step;
+    _yaw_err_i += _yaw_err * _yaw_gains[2];
+    _yaw_command = _yaw_gains[0] * _yaw_err + _yaw_gains[1] * yaw_err_d + _yaw_err_i;
+
+//    std::cout << "yaw command = " << _yaw_command << std::endl << std::endl;
+
+}
+
 void position_control::RunController(){
 
     ROS_INFO_ONCE("[pos_ctl] First loop");
@@ -151,7 +170,7 @@ void position_control::RunController(){
         CalculateVelocitySP();
 
     CalculateThrustVector();
-
+    calculateYawCommand();
     CalculateAttitudeSPFromThrust();
 
 }
